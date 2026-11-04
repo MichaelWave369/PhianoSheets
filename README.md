@@ -51,6 +51,15 @@ For local preview, Vite serves this Pages build under `/PhianoSheets/`; navigate
 
 > **Deployment boundary:** PhianoSheets is a static client-side app. No API keys, server, or paid services are needed for the built-in synthesizer. The optional SoundFont patches load remotely when requested and require internet access.
 
+### GitHub Pages retry troubleshooting
+
+If **Publish site** fails after the build and upload succeed:
+
+- **`Current status: updating_pages` followed by a timeout:** GitHub accepted the artifact but its Pages backend did not finish publishing in time. This is not a Vite compilation failure. Check the repository's Pages configuration and GitHub's service status.
+- **`Multiple artifacts named "github-pages"`:** Re-running an older workflow run can accumulate artifacts with the same name. Never retry the old run indefinitely. Use **Actions → Deploy PhianoSheets to GitHub Pages → Run workflow → main** for a **new run ID**, or push a new commit to `main`.
+- New runs after this fix use per-attempt artifact names to prevent old uploads from colliding with the fresh attempt.
+- Treat the site as deployed **only** when both **Publish site** and **Verify public page and assets** succeed.
+
 ## Netlify
 
 The included `netlify.toml` sets `npm run build` and publish directory `dist`. Import this repository into Netlify for continuous deploys. **A passing CI run does not itself mean a live Netlify site has been deployed.**
