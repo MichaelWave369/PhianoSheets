@@ -3,6 +3,9 @@ import { AudioEngine } from './music/audio.js';
 import { createSong, DEFAULT_SETTINGS, ROOTS, SCALES, STYLES, TRACKS, STEPS_PER_BAR } from './music/generator.js';
 import { downloadMidi } from './music/midi.js';
 import PianoRoll from './components/PianoRoll.jsx';
+import Workbench from './components/Workbench.jsx';
+import { regenerateTrack, setChordDegree, moveSection, toggleDrumStep, addDrumFill, setEuclideanDrums, copyClip, pasteClip, normalizeSong } from './music/editor.js';
+import { parseMidi } from './music/import.js';
 
 const KEY = 'phianosheets.project.v1';
 const initialMixer=Object.fromEntries(TRACKS.map(t=>[t.id,{volume:t.id==='drums' ? .85 : .78,pan:0,mute:false,solo:false}]));
@@ -10,10 +13,10 @@ const readProject=()=>{
   try{
     const stored=JSON.parse(localStorage.getItem(KEY));
     if(stored?.song?.tracks && stored?.song?.settings && stored?.settings && stored?.mixer){
-      return {settings:{...DEFAULT_SETTINGS,...stored.settings},song:stored.song,mixer:{...initialMixer,...stored.mixer}};
+      return {settings:{...DEFAULT_SETTINGS,...stored.settings},song:normalizeSong(stored.song),mixer:{...initialMixer,...stored.mixer}};
     }
   }catch{/* Fresh start on invalid saved data. */}
-  return {settings:DEFAULT_SETTINGS,song:createSong(DEFAULT_SETTINGS),mixer:initialMixer};
+  return {settings:DEFAULT_SETTINGS,song:normalizeSong(createSong(DEFAULT_SETTINGS)),mixer:initialMixer};
 };
 const prettyTime=(total)=>`${Math.floor(total/60)}:${String(Math.floor(total%60)).padStart(2,'0')}`;
 const safeName=name=>(name||'phianosheets').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
@@ -55,7 +58,11 @@ function App(){
   const [soundfontStatus,setSoundfontStatus]=useState('Built-in synth ready');
   const [error,setError]=useState('');
   const [showInfo,setShowInfo]=useState(false);
-  const engine=useRef(null), fileRef=useRef(null);
+  const engine=useRef(null), fileRef=useRef(null), midiRef=useRef(null);
+  const songRef=useRef(first.song);
+  const history=useRef({past:[],future:[]});
+  const [,refreshHistory]=useState(0);
+  const [clipboard,setClipboard]=useState(null);
   if(!engine.current && typeof window!=='undefined')engine.current=new AudioEngine();
   useEffect(()=>{
     try { localStorage.setItem(KEY,JSON.stringify({settings,song,mixer})); }
@@ -70,7 +77,29 @@ function App(){
   const hasSolo=TRACKS.some(t=>mixer[t.id]?.solo);
   const activeCount=TRACKS.filter(t=>!mixer[t.id]?.mute&&(!hasSolo||mixer[t.id]?.solo)).length;
 
-  const stop=useCallback(()=>{engine.current?.stop();setPlaying(false);setSelectedBar(0);},[]);
+  const stop=useCallback((resetBar=true)=>{engine.current?.stop();setPlaying(false);if(resetBar)setSelectedBar(0);},[]);
+  const commitSong=useCallback(next=>{
+    const previous=songRef.current;
+    if(next===previous)return;
+    history.current.past.push(previous);
+    if(history.current.past.length>40)history.current.past.shift();
+    history.current.future=[];
+    songRef.current=next;setSong(next);refreshHistory(n=>n+1);
+  },[]);
+  const restoreSong=useCallback(next=>{
+    stop(false);songRef.current=next;setSong(next);
+    setSelectedBar(bar=>Math.min(bar,next.settings.bars-1));
+    setSettings({...DEFAULT_SETTINGS,...next.settings});
+    refreshHistory(n=>n+1);
+  },[stop]);
+  const undo=useCallback(()=>{
+    const previous=history.current.past.pop();if(!previous)return;
+    history.current.future.push(songRef.current);restoreSong(previous);
+  },[restoreSong]);
+  const redo=useCallback(()=>{
+    const next=history.current.future.pop();if(!next)return;
+    history.current.past.push(songRef.current);restoreSong(next);
+  },[restoreSong]);
   const start=useCallback(async()=>{
     setError('');
     try{
@@ -82,32 +111,54 @@ function App(){
   const toggle=useCallback(()=>playing?stop():start(),[playing,stop,start]);
   useEffect(()=>{
     const onKey=(e)=>{
+      if((e.ctrlKey||e.metaKey)&&['z','y'].includes(e.key.toLowerCase())){
+        if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName)||document.activeElement?.isContentEditable)return;
+        e.preventDefault();
+        if(e.key.toLowerCase()==='y'||e.shiftKey)redo();else undo();
+        return;
+      }
       if(e.code==='Space' && !['INPUT','TEXTAREA','SELECT','BUTTON'].includes(document.activeElement?.tagName)){
         e.preventDefault();toggle();
       }
     };
     window.addEventListener('keydown',onKey);
     return ()=>window.removeEventListener('keydown',onKey);
-  },[toggle]);
+  },[toggle,undo,redo]);
   // Keep lightweight playback/groove edits in sync without changing note composition.
   const setField=(field,val)=>{
     // Live playback has a precomputed event schedule; restart after timing changes.
-    if(['bpm','swing','humanize'].includes(field) && engine.current?.isPlaying) stop();
+    if(['bpm','swing','humanize'].includes(field) && engine.current?.isPlaying) stop(false);
     setSettings(s=>({...s,[field]:val}));
-    if(['bpm','swing','humanize','title'].includes(field))setSong(s=>({...s,settings:{...s.settings,[field]:val}}));
+    if(['bpm','swing','humanize','title'].includes(field)){
+      const updated={...songRef.current,settings:{...songRef.current.settings,[field]:val}};
+      songRef.current=updated;setSong(updated);
+    }
   };
   const generate=(overrides={},freshSeed=false)=>{
     stop();setError('');
     const next={...settings,...overrides};
     if(freshSeed)next.seed=Math.floor(Math.random()*9999999)+1;
-    setSettings(next);setSong(createSong(next));setSelectedBar(0);
+    setSettings(next);commitSong(normalizeSong(createSong(next)));setSelectedBar(0);
   };
   const selectStyle=(id)=>{
     const style=STYLES.find(s=>s.id===id);
     generate({style:id,bpm:style?.tempo||92},false);
   };
   const updateMixer=(id,field,val)=>setMixer(s=>({...s,[id]:{...s[id],[field]:val}}));
-  const updateNotes=(id,notes)=>{stop();setSong(s=>({...s,tracks:{...s.tracks,[id]:notes}}));};
+  const updateNotes=(id,notes)=>{
+    stop(false);commitSong({...songRef.current,tracks:{...songRef.current.tracks,[id]:notes}});
+  };
+  const editSong=operation=>{
+    stop(false);setError('');commitSong(operation(songRef.current));
+  };
+  const regenerateSelected=id=>editSong(s=>regenerateTrack(s,id));
+  const changeChord=(position,degree)=>editSong(s=>setChordDegree(s,position,degree));
+  const reorderSection=(index,direction)=>editSong(s=>moveSection(s,index,direction));
+  const toggleStep=(bar,step,pitch,velocity)=>editSong(s=>toggleDrumStep(s,bar,step,pitch,velocity));
+  const fillBar=bar=>editSong(s=>addDrumFill(s,bar));
+  const euclid=(bar,pitch,pulses,rotation,velocity)=>editSong(s=>setEuclideanDrums(s,bar,pitch,pulses,rotation,velocity));
+  const copySelectedClip=()=>setClipboard(copyClip(songRef.current,selectedTrack,selectedBar,2));
+  const pasteSelectedClip=()=>{if(clipboard)editSong(s=>pasteClip(s,selectedTrack,selectedBar,clipboard));};
   const loadFonts=async()=>{
     setSoundfontStatus('Loading SoundFont patches…');setError('');
     try{
@@ -120,11 +171,25 @@ function App(){
     try{
       const project=JSON.parse(await file.text());
       if(!project.settings||!project.song?.tracks||!project.mixer||!TRACKS.every(t=>Array.isArray(project.song.tracks[t.id])))throw Error('Invalid PhianoSheets project file');
-      stop();setSettings({...DEFAULT_SETTINGS,...project.settings});setSong(project.song);setMixer({...initialMixer,...project.mixer});setError('');
+      stop();
+      const restored=normalizeSong(project.song);
+      commitSong(restored);
+      setSettings({...DEFAULT_SETTINGS,...project.settings,...restored.settings});
+      setMixer({...initialMixer,...project.mixer});setError('');
     }catch(e){setError(`Import failed: ${e?.message||'Invalid file'}`);}
     e.target.value='';
   };
-  const sectionAtBar=bar=>song.sections.find(s=>bar>=s.start&&bar<s.start+s.bars);
+  const importMidiFile=async e=>{
+    const file=e.target.files?.[0];if(!file)return;
+    try{
+      const {song:imported,warnings}=parseMidi(await file.arrayBuffer());
+      const titled={...imported,settings:{...imported.settings,title:file.name.replace(/\.mid(i)?$/i,'').slice(0,65)}};
+      stop();commitSong(normalizeSong(titled));
+      setSettings(titled.settings);setSelectedTrack('melody');setError(warnings.join(' '));
+    }catch(error){setError('MIDI import failed: '+(error?.message||'Invalid MIDI file'));}
+    e.target.value='';
+  };
+  const canUndo=history.current.past.length>0,canRedo=history.current.future.length>0;
   const counts=useMemo(()=>Object.fromEntries(TRACKS.map(t=>{
     const a=Array(song.settings.bars).fill(0);
     (song.tracks[t.id]||[]).forEach(n=>{const b=Math.floor(n.step/16);if(b>=0&&b<a.length)a[b]++;});
@@ -133,7 +198,7 @@ function App(){
   return <div className="shell">
     <header className="site-header">
       <div className="brand"><div className="brand-mark"><span>Φ</span></div><div><div className="brand-name">PHIANO<span>SHEETS</span><sup>369</sup></div><div className="brand-tagline">THE MIDI IDEA MACHINE</div></div></div>
-      <nav className="top-nav"><span className="nav-current">STUDIO <span className="nav-dot"/></span><span className="nav-passive">GEN ENGINE V0.1</span></nav>
+      <nav className="top-nav"><span className="nav-current">STUDIO <span className="nav-dot"/></span><span className="nav-passive">GEN ENGINE V0.2</span></nav>
       <div className="header-actions"><span className="online-indicator"><span/> LOCAL-FIRST ENGINE</span><button className="icon-btn" onClick={()=>setShowInfo(s=>!s)} title="About PhianoSheets"><Icon name="help"/></button><a className="github-link" href="https://github.com/MichaelWave369/PhianoSheets" target="_blank" rel="noreferrer">GITHUB ↗</a></div>
     </header>
 
@@ -172,9 +237,13 @@ function App(){
                 <div className="bar-ruler footer-ruler"><span className="track-head">END OF SESSION</span><div className="ruler-bars">{Array.from({length:song.settings.bars},(_,b)=><span key={b} style={{flex:1}}>{b%4===0?b+1:''}</span>)}</div></div>
               </div></div>
           </div>
-          <PianoRoll song={song} trackId={selectedTrack} bar={Math.floor(selectedBar/2)*2} onChange={updateNotes}/>
-          <div className="export-panel"><div><span className="export-asterisk">✳</span><div><strong>GOOD IDEAS DESERVE TO LEAVE THE BROWSER.</strong><p>Take your arrangement into FL Studio, Ableton, Reaper, Logic, or any MIDI-capable DAW.</p></div></div><div className="export-actions"><button className="secondary-btn" onClick={()=>downloadJson({version:1,settings,song,mixer},settings.title)}><Icon name="disk" size={15}/> SAVE PROJECT</button><button className="export-btn" onClick={()=>downloadMidi(song,mixer)}><Icon name="download" size={16}/> EXPORT MIDI</button><input ref={fileRef} type="file" hidden accept=".json,.phiano.json" onChange={importProject}/></div></div>
-          <button className="import-link" onClick={()=>fileRef.current?.click()}><Icon name="upload" size={15}/> IMPORT PROJECT JSON</button>
+          <Workbench song={song} trackId={selectedTrack} bar={selectedBar} canUndo={canUndo} canRedo={canRedo}
+              clipboard={clipboard} onUndo={undo} onRedo={redo} onRegenerate={regenerateSelected}
+              onChordChange={changeChord} onMoveSection={reorderSection} onCopy={copySelectedClip}
+              onPaste={pasteSelectedClip} onToggleDrum={toggleStep} onFill={fillBar} onEuclid={euclid}/>
+           <PianoRoll song={song} trackId={selectedTrack} bar={Math.floor(selectedBar/2)*2} onChange={updateNotes}/>
+          <div className="export-panel"><div><span className="export-asterisk">✳</span><div><strong>GOOD IDEAS DESERVE TO LEAVE THE BROWSER.</strong><p>Take your arrangement into FL Studio, Ableton, Reaper, Logic, or any MIDI-capable DAW.</p></div></div><div className="export-actions"><button className="secondary-btn" onClick={()=>downloadJson({version:2,settings,song,mixer},settings.title)}><Icon name="disk" size={15}/> SAVE PROJECT</button><button className="export-btn" onClick={()=>downloadMidi(song,mixer)}><Icon name="download" size={16}/> EXPORT MIDI</button><input ref={fileRef} type="file" hidden accept=".json,.phiano.json" onChange={importProject}/><input ref={midiRef} type="file" hidden accept=".mid,.midi,audio/midi" onChange={importMidiFile}/></div></div>
+          <div className="import-links"><button className="import-link" onClick={()=>fileRef.current?.click()}><Icon name="upload" size={15}/> IMPORT PROJECT JSON</button><button className="import-link" onClick={()=>midiRef.current?.click()}><Icon name="upload" size={15}/> IMPORT MIDI</button></div>
         </section>
 
         <aside className="mixer-sidebar"><div className="panel-heading"><span className="panel-number">04</span><h2>GROOVE & MIXER</h2><Icon name="headphones" size={18}/></div>
@@ -194,7 +263,7 @@ function App(){
           <div className="soundfont-block"><div><span className="sf-icon">▧</span><strong>SOUNDFONT PLAYER</strong></div><p>Instant built-in synth, or load sampled GM instrument patches when online.</p><button onClick={loadFonts} disabled={soundfontStatus.startsWith('Loading')}>LOAD GM SOUNDFONTS</button><small>{soundfontStatus}</small></div>
         </aside>
       </div>
-      <footer className="site-footer"><span>Φ369 LABS / PHIANOSHEETS v0.1</span><span>BUILT FOR MUSIC MAKERS, NOT GATEKEEPERS.</span><span>OPEN SOURCE · MIT LICENSE</span></footer>
+      <footer className="site-footer"><span>Φ369 LABS / PHIANOSHEETS v0.2</span><span>BUILT FOR MUSIC MAKERS, NOT GATEKEEPERS.</span><span>OPEN SOURCE · MIT LICENSE</span></footer>
     </main>
   </div>;
 }

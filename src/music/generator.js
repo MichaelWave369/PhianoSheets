@@ -72,7 +72,11 @@ export function createSong(input = {}) {
   const intervals = SCALES[settings.scale] || SCALES.minor;
   const root = ROOTS.indexOf(settings.root) >= 0 ? ROOTS.indexOf(settings.root) : 0;
   const sectionAt = makeSections(bars);
-  const progression = pick(progressions[settings.scale] || progressions.minor, rand);
+  // Allow a user-authored four-chord progression without changing the rest of
+  // the seeded arrangement grammar. The original seed still drives groove/riffs.
+  const progression = Array.isArray(input.progression) && input.progression.length === 4
+    ? input.progression.map(n => clamp(Math.trunc(Number(n) || 0), 0, intervals.length - 1))
+    : pick(progressions[settings.scale] || progressions.minor, rand);
   const tracks = Object.fromEntries(TRACKS.map(t => [t.id, []]));
   const v = (center, variance=14) => clamp(Math.round(center + (rand()-.5)*variance), 30, 124);
   const degree = (d, octave=4) => {

@@ -18,6 +18,21 @@ PhianoSheets generates musical *arrangements* with sections, not just four-bar l
 - **Save/reopen:** Browser autosave via localStorage plus portable `.phiano.json` project export/import.
 - **Live React app:** Vite + React, deployable to Netlify or GitHub Pages.
 
+## Rung 2: Composition Workbench (v0.2)
+
+The new composition workbench extends the **same** six-track engine and MIDI export workflow tested with FL Studio:
+
+- **Regenerate one track:** choose any arrangement lane, regenerate just that part; the other five lanes and original seed remain unchanged. Subsequent clicks produce new variations.
+- **Chord Lab:** edit any of four scale-degree slots. Bass, chords and arpeggio accompaniment are reharmonized; drums, melody and lead are deliberately preserved. These accompaniment tracks are regenerated, so save a project first if you have hand-edited them.
+- **Sections:** move Intro/Verse/Hook/Bridge/etc. left or right, taking note clips with them. Notes crossing an old section boundary are clipped to stay within their section.
+- **Clip copy/paste:** select a track and bar, copy up to two bars, then paste into the same or another track at a selected destination bar (replaces destination notes in that span).
+- **16-step drum machine:** Kick, Snare, Closed Hat, Open Hat, Crash. Toggle hits in the current bar, set step velocity, add deterministic fills, or generate Euclidean rhythms with pulse count and rotation for one drum voice.
+- **Better piano roll:** click to add/select notes; drag to move, drag right edge to resize; keyboard-accessible step/length editing and Delete.
+- **40-step undo/redo:** song-changing operations are reversible, including section swaps, chord rewrites, generated variations and piano-roll edits. Buttons and Ctrl/Cmd+Z / Shift+Z are provided; text fields retain native undo.
+- **MIDI import:** standard MIDI type 0/1 with PPQ timing, note on/off and note velocities. This is a **16th-note quantized import**, up to **64 bars**, mapping PhianoSheets-named parts (or fallback MIDI channels) to the six lanes. Unrecognized DAW controller automation, exotic messages, arbitrary channel mappings and high-resolution microtiming are *not* preserved. Imported files reset swing and humanization to avoid double-applying timing. Store a portable `.phiano.json` for full project fidelity.
+
+Browser project autosave and portable JSON import/export remain compatible with v0.1 projects, and MIDI still exports as the same format 1 multitrack file. This release does not add VST3 or local SF2 support.
+
 ## Local development
 
 Node 20.19+ / Node 22.12+ recommended.
