@@ -33,3 +33,18 @@
 .import-links{display:flex;gap:14px;align-items:center;align-self:flex-end;flex-wrap:wrap}.import-links .import-link{margin-top:-5px}
 @media(max-width:1150px){.workbench-tools{grid-template-columns:1fr}.wb-tool+.wb-tool{border-left:0;border-top:1px solid #293b50}.wb-section-list{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:640px){.workbench-head{align-items:start;flex-wrap:wrap}.wb-section-title{align-items:start;flex-direction:column}.wb-section-list{grid-template-columns:1fr}.wb-drum-row>span{width:62px}.wb-drum-controls>*{flex-grow:1}.export-actions{flex-wrap:wrap}.roll-header{height:auto;min-height:49px;padding:12px;flex-wrap:wrap}.roll-editbar{align-items:start}}
+
+
+/* Rung 3 sound lab */
+.soundlab-channel{padding-top:10px;margin-top:11px;border-top:1px dashed #2a394c}
+.soundlab-voice{display:block;color:#8ea2b6;font:9px 'DM Mono',monospace;letter-spacing:1px}
+.soundlab-voice select{display:block;margin-top:7px;width:100%;padding:8px 7px;border:1px solid #405269;border-radius:4px;background:#121f30;color:#d8c3a0;font:10px 'DM Mono',monospace}
+.soundlab-params{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:11px}
+.soundlab-params label{font:9px 'DM Mono',monospace;color:#8396ad;min-width:0}
+.soundlab-params strong{float:right;color:#d5b88c;font-weight:400}
+.soundlab-params input{width:100%;margin-top:6px;accent-color:#d7ac70;cursor:pointer}
+.wav-export-btn{display:flex;justify-content:center;align-items:center;gap:7px;border:1px solid #7dbbae;border-radius:4px;background:#214139;color:#c8eee0;padding:11px 13px;white-space:nowrap;font:600 10px 'DM Mono',monospace;letter-spacing:.5px}
+.wav-export-btn:disabled{opacity:.55;cursor:progress}
+.wav-note{margin-top:-6px;padding:0 5px 4px;font:10px 'DM Sans',sans-serif;color:#91a7b5;line-height:1.5}
+.export-panel{flex-wrap:wrap}.export-actions{flex-wrap:wrap}
+@media(max-width:700px){.soundlab-params{gap:8px}.wav-export-btn{flex-grow:1}}
