@@ -37,12 +37,17 @@ jobs:
         run: npm run check:pages
       - name: Configure Pages
         uses: actions/configure-pages@v5
+      # A workflow run can be retried. Each attempt must have a unique artifact
+      # name, or deploy-pages fails when it finds several "github-pages" uploads.
       - name: Upload production site
         uses: actions/upload-pages-artifact@v4
         with:
+          name: github-pages-${{ github.run_attempt }}
           path: ./dist
       - name: Publish site
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
       - name: Verify public page and assets
         run: node scripts/check-pages-live.mjs "${{ steps.deployment.outputs.page_url }}"
