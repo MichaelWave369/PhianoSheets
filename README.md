@@ -33,6 +33,24 @@ The new composition workbench extends the **same** six-track engine and MIDI exp
 
 Browser project autosave and portable JSON import/export remain compatible with v0.1 projects, and MIDI still exports as the same format 1 multitrack file. This release does not add VST3 or local SF2 support.
 
+## Rung 3A: Sound Lab and WAV bounce (v0.3)
+
+The browser now exposes additional per-track controls for the **same six MIDI lanes**:
+
+- **Voice selection:** Auto (play the optionally loaded online GM SoundFont patch, with built-in fallback) or built-in sine, triangle, sawtooth, square and pluck voices on pitched lanes. Drums stay on their synthesized kit.
+- **Filter:** Per-track low-pass frequency sweep. 100% is essentially open; reducing it darkens the track.
+- **Delay:** Per-track send to a shared tempo-synced eighth-note delay. Includes controlled feedback and a compressor after the master bus.
+- **WAV export:** An uncompressed **44.1 kHz stereo, 16-bit PCM WAV** rendered with Web Audio \`OfflineAudioContext\`. It uses the same deterministic note schedule, builtin synth/drum voices, volume, pan, mute/solo, filter, delay and master level as browser audition.
+- **Persistence:** The existing \`.phiano.json\` projects (v1/v2) remain loadable; version 3 adds master volume and the new mixer effects/voice selections.
+
+### Known boundaries
+
+**Important SoundFont distinction:** WAV bounce currently uses the **built-in synth** for every pitched track, even if online GM SoundFonts were loaded for listening in the browser. The WAV export preserves the notes, mix and effects, but it does **not** capture remote sampled SoundFont playback. If you want FL Studio to use your own sample instruments, export MIDI as before and assign instruments there.
+
+An offline render needs to hold the whole audio buffer in memory, so WAV export has a 4-minute arrangement limit plus a 2-second effect tail. Long or complex projects can consume substantial RAM on phones. WAV export is a one-shot file operation; it does not play a generated song or run a server. If offline rendering is unavailable, MIDI export remains functional.
+
+Direct local \`.sf2\`/\`.sfz\` ingestion, additional sample layers, audio stems, reverb and effect automation remain for a following Rung 3B. No third-party samples have been added to this repository.
+
 ## Local development
 
 Node 20.19+ / Node 22.12+ recommended.
@@ -97,7 +115,7 @@ The generator and MIDI exporter are pure JavaScript, intentionally portable into
 
 - **Rung 1: Browser playable studio (this PR).** Full song generator, six tracks, piano roll, mixer, MIDI export, saved projects, online SoundFont preset loading, tests, live-ready React app.
 - **Rung 2: Arrangement editor.** Drag/copy/paste section clips, per-track generation, chord progression editor, probability, Euclidean drums, step sequencer, fill button, music theory tools, Undo/Redo, MIDI import.
-- **Rung 3: Advanced audio.** Local `.sf2`/`.sfz` support via a suitable licensed sampler engine, velocity layers, effects sends, audio export, better time-synchronized transport, playback metering and automation.
+- **Rung 3: Advanced audio.** v0.3 adds offline WAV bounce, filter/delay and synth voices; remaining work includes local `.sf2`/`.sfz` support via a suitable licensed sampler engine, velocity layers, effects sends, audio export, better time-synchronized transport, playback metering and automation.
 - **Rung 4: Native plugin output.** Reuse a portable composition core in a desktop **VST3/CLAP** plugin host shell (e.g. JUCE or iPlug2), MIDI output, host tempo/transport sync, parameter automation, plugin validation, installer/signing. Browser apps cannot themselves emit a VST3 binary; this requires separate native code and builds. AU can follow for macOS.
 - **Rung 5: Phi ecosystem integrations.** MoreBounceLabs Writer's Room, PhiOS audio workflows, MIDI pattern libraries and cross-app project handoff.
 
