@@ -77,7 +77,7 @@ function App(){
   const hasSolo=TRACKS.some(t=>mixer[t.id]?.solo);
   const activeCount=TRACKS.filter(t=>!mixer[t.id]?.mute&&(!hasSolo||mixer[t.id]?.solo)).length;
 
-  const stop=useCallback(()=>{engine.current?.stop();setPlaying(false);setSelectedBar(0);},[]);
+  const stop=useCallback((resetBar=true)=>{engine.current?.stop();setPlaying(false);if(resetBar)setSelectedBar(0);},[]);
   const commitSong=useCallback(next=>{
     const previous=songRef.current;
     if(next===previous)return;
@@ -87,7 +87,8 @@ function App(){
     songRef.current=next;setSong(next);refreshHistory(n=>n+1);
   },[]);
   const restoreSong=useCallback(next=>{
-    stop();songRef.current=next;setSong(next);
+    stop(false);songRef.current=next;setSong(next);
+    setSelectedBar(bar=>Math.min(bar,next.settings.bars-1));
     setSettings({...DEFAULT_SETTINGS,...next.settings});
     refreshHistory(n=>n+1);
   },[stop]);
@@ -126,7 +127,7 @@ function App(){
   // Keep lightweight playback/groove edits in sync without changing note composition.
   const setField=(field,val)=>{
     // Live playback has a precomputed event schedule; restart after timing changes.
-    if(['bpm','swing','humanize'].includes(field) && engine.current?.isPlaying) stop();
+    if(['bpm','swing','humanize'].includes(field) && engine.current?.isPlaying) stop(false);
     setSettings(s=>({...s,[field]:val}));
     if(['bpm','swing','humanize','title'].includes(field)){
       const updated={...songRef.current,settings:{...songRef.current.settings,[field]:val}};
@@ -145,10 +146,10 @@ function App(){
   };
   const updateMixer=(id,field,val)=>setMixer(s=>({...s,[id]:{...s[id],[field]:val}}));
   const updateNotes=(id,notes)=>{
-    stop();commitSong({...songRef.current,tracks:{...songRef.current.tracks,[id]:notes}});
+    stop(false);commitSong({...songRef.current,tracks:{...songRef.current.tracks,[id]:notes}});
   };
   const editSong=operation=>{
-    stop();setError('');commitSong(operation(songRef.current));
+    stop(false);setError('');commitSong(operation(songRef.current));
   };
   const regenerateSelected=id=>editSong(s=>regenerateTrack(s,id));
   const changeChord=(position,degree)=>editSong(s=>setChordDegree(s,position,degree));
