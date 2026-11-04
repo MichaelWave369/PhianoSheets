@@ -44,3 +44,5 @@ jobs:
       - name: Publish site
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify public page and assets
+        run: node scripts/check-pages-live.mjs "${{ steps.deployment.outputs.page_url }}"
