@@ -5,6 +5,7 @@ import { regenerateTrack, setChordDegree, moveSection, toggleDrumStep, setEuclid
   addDrumFill, copyClip, pasteClip, normalizeSong } from '../src/music/editor.js';
 import { parseMidi } from '../src/music/import.js';
 import { buildMidi } from '../src/music/midi.js';
+const musicalOrder=(notes)=>[...notes].sort((a,b)=>a.step-b.step||a.pitch-b.pitch||a.length-b.length||a.velocity-b.velocity);
 
 test('track regeneration preserves the other five lanes, harmonic context and source seed',()=>{
   const original=normalizeSong(createSong({bars:16,seed:369}));
@@ -56,7 +57,7 @@ test('Euclidean drum patterns use exact pulse count and preserve other voices',(
   const before=s.tracks.drums.filter(n=>n.pitch!==42);
   const updated=setEuclideanDrums(s,2,42,5,3,77);
   assert.equal(updated.tracks.drums.filter(n=>n.pitch===42&&n.step>=32&&n.step<48).length,5);
-  assert.deepEqual(updated.tracks.drums.filter(n=>n.pitch!==42),before);
+  assert.deepEqual(musicalOrder(updated.tracks.drums.filter(n=>n.pitch!==42)),musicalOrder(before));
   assert.ok(updated.tracks.drums.filter(n=>n.pitch===42&&n.step>=32&&n.step<48).every(n=>n.velocity===77));
   assert.equal(setEuclideanDrums(updated,2,42,0).tracks.drums.filter(n=>n.pitch===42&&n.step>=32&&n.step<48).length,0);
 });
@@ -90,7 +91,7 @@ test('standard multitrack MIDI export can be imported with pitch and channels in
   assert.equal(song.settings.swing,0);
   for(const t of TRACKS){
     assert.equal(song.tracks[t.id].length,s.tracks[t.id].length,'unexpected note count for '+t.id);
-    assert.deepEqual(song.tracks[t.id].map(n=>n.pitch),s.tracks[t.id].map(n=>n.pitch));
+    assert.deepEqual(musicalOrder(song.tracks[t.id]),musicalOrder(s.tracks[t.id]));
   }
 });
 

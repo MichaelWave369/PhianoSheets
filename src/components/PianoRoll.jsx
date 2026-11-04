@@ -54,8 +54,8 @@ export default function PianoRoll({song,trackId,bar,windowBars=2,onChange}){
     const dRow=Math.round((e.clientY-g.y)/(rect.height/rows));
     if(g.mode==='resize')return {...g.original,length:clamp(g.original.length+dStep,1,song.settings.bars*16-g.original.step)};
     return {...g.original,
-      step:clamp(g.original.step+dStep,0,song.settings.bars*16-g.original.length),
-      pitch:isDrum?g.original.pitch:clamp(g.original.pitch-dRow,0,127)};
+      step:clamp(g.original.step+dStep,start,Math.min(song.settings.bars*16-g.original.length,start+span-1)),
+      pitch:isDrum?g.original.pitch:clamp(g.original.pitch-dRow,minNote,maxNote)};
   };
   const move=e=>{if(gesture.current)setPreview(transform(e));};
   const finish=e=>{
