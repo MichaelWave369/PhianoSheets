@@ -30,6 +30,27 @@ npm run check
 
 Open the dev URL. The first play requires a user gesture to start Web Audio. To build the deployable static site: `npm run build`; publish the resulting `dist/` folder.
 
+## GitHub Pages (first public testing stage)
+
+**Target URL:** https://michaelwave369.github.io/PhianoSheets/
+
+1. In the GitHub repository, select **Settings → Pages → Build and deployment → Source: GitHub Actions**. This one-time repository setting cannot be performed by the ordinary workflow token. The site URL is not considered live until a successful deployment and an HTTP check.
+2. Merge the Pages deployment PR to `main`. `.github/workflows/pages.yml` will test, build, check output paths and upload `dist/` using the official Pages actions. Every later push to `main` automatically redeploys the site.
+3. In **Actions → Deploy PhianoSheets to GitHub Pages**, inspect **Publish site** and **Verify public page and assets**. If the Pages setting was enabled after the first run failed, use **Run workflow** to redeploy.
+4. Open the URL above with the browser cache disabled. Verify six tracks are visible, Generate Song works, Play/Stop/Loop produce audible playback, piano-roll edits persist, mixer mute/solo controls affect auditioning, and MIDI + JSON exports download. Check mobile viewport and network-offline fallback synthesis too.
+
+To reproduce the production Pages build locally:
+
+```bash
+npm install
+npm run check:pages
+npm run preview -- --mode pages
+```
+
+For local preview, Vite serves this Pages build under `/PhianoSheets/`; navigate there. `npm run build` remains root-based for local and future Netlify hosting. CI runs both build modes so future changes cannot silently break one.
+
+> **Deployment boundary:** PhianoSheets is a static client-side app. No API keys, server, or paid services are needed for the built-in synthesizer. The optional SoundFont patches load remotely when requested and require internet access.
+
 ## Netlify
 
 The included `netlify.toml` sets `npm run build` and publish directory `dist`. Import this repository into Netlify for continuous deploys. **A passing CI run does not itself mean a live Netlify site has been deployed.**

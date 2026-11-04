@@ -8,9 +8,13 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test": "node --test tests/*.test.js",
-    "check": "npm run test && npm run build"
+    "check": "npm run test && npm run build",
+    "build:pages": "vite build --mode pages",
+    "check:pages": "npm run build:pages && node scripts/check-pages-build.mjs"
   },
-  "engines": { "node": ">=20.19.0" },
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "dependencies": {
     "react": "^19.2.0",
     "react-dom": "^19.2.0",

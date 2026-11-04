@@ -57,14 +57,18 @@ function App(){
   const [showInfo,setShowInfo]=useState(false);
   const engine=useRef(null), fileRef=useRef(null);
   if(!engine.current && typeof window!=='undefined')engine.current=new AudioEngine();
-  useEffect(()=>{localStorage.setItem(KEY,JSON.stringify({settings,song,mixer}));},[settings,song,mixer]);
+  useEffect(()=>{
+    try { localStorage.setItem(KEY,JSON.stringify({settings,song,mixer})); }
+    catch { /* Project export still works if browser storage is blocked or full. */ }
+  },[settings,song,mixer]);
   useEffect(()=>{engine.current?.setMixer(mixer);},[mixer]);
   useEffect(()=>{engine.current?.setMaster(master);},[master]);
   useEffect(()=>()=>engine.current?.dispose(),[]);
   const totalNotes=Object.values(song.tracks).reduce((sum,arr)=>sum+arr.length,0);
   const seconds=song.settings.bars*4*60/song.settings.bpm;
   const duration=prettyTime(seconds);
-  const activeCount=TRACKS.filter(t=>!mixer[t.id]?.mute).length;
+  const hasSolo=TRACKS.some(t=>mixer[t.id]?.solo);
+  const activeCount=TRACKS.filter(t=>!mixer[t.id]?.mute&&(!hasSolo||mixer[t.id]?.solo)).length;
 
   const stop=useCallback(()=>{engine.current?.stop();setPlaying(false);setSelectedBar(0);},[]);
   const start=useCallback(async()=>{
@@ -87,6 +91,8 @@ function App(){
   },[toggle]);
   // Keep lightweight playback/groove edits in sync without changing note composition.
   const setField=(field,val)=>{
+    // Live playback has a precomputed event schedule; restart after timing changes.
+    if(['bpm','swing','humanize'].includes(field) && engine.current?.isPlaying) stop();
     setSettings(s=>({...s,[field]:val}));
     if(['bpm','swing','humanize','title'].includes(field))setSong(s=>({...s,settings:{...s.settings,[field]:val}}));
   };
@@ -152,7 +158,7 @@ function App(){
         </aside>
 
         <section className="studio-center">
-          <div className="transport-panel"><div className="transport-top"><div className="transport-label"><span className="panel-number">02</span> THE WORKSPACE <span className="transport-title">/ {song.settings.title||'UNTITLED SESSION'}</span></div><span className="session-format">44.1kHz AUDIO PREVIEW · MIDI 1.0 EXPORT</span></div>
+          <div className="transport-panel"><div className="transport-top"><div className="transport-label"><span className="panel-number">02</span> THE WORKSPACE <span className="transport-title">/ {song.settings.title||'UNTITLED SESSION'}</span></div><span className="session-format">WEB AUDIO PREVIEW · MIDI 1.0 EXPORT</span></div>
             <div className="transport-controls"><button className="play-btn" onClick={toggle} aria-label={playing?'Stop playback':'Start playback'}><Icon name={playing?'stop':'play'} size={20}/></button><div className="transport-location"><strong>{String(selectedBar+1).padStart(2,'0')}<span>.01</span></strong><small>BAR · BEAT</small></div><div className="transport-divider"/><div className="tempo-field"><small>TEMPO</small><div><input aria-label="Tempo in BPM" type="number" min="40" max="240" value={settings.bpm} onChange={e=>setField('bpm',Math.min(240,Math.max(40,Number(e.target.value)||40)))}/><span>BPM</span></div></div><div className="transport-divider"/><div className="time-field"><small>TIME SIG</small><strong>4 / 4</strong></div><div className="transport-spacer"/><button className={'loop-btn '+(loop?'on':'')} onClick={()=>setLoop(v=>!v)} title="Toggle loop"><Icon name="loop" size={17}/><span>LOOP</span></button><span className="song-time">{duration}</span></div>
             <div className="transport-bottom"><span className="status-dot"/>{playing?'PLAYING ARRANGEMENT':'READY TO CREATE'} <span className="transport-bottom-right">6 TRACKS <span>·</span> {song.settings.bars} BARS <span>·</span> {settings.root} {settings.scale.toUpperCase()}</span></div>
           </div>
@@ -177,7 +183,7 @@ function App(){
             <Slider label="HUMANIZE" value={settings.humanize} onChange={v=>setField('humanize',v)} suffix="%"/>
             <Slider label="COMPLEXITY" value={settings.complexity} onChange={v=>setField('complexity',v)} suffix="%"/>
             <Slider label="NOTE DENSITY" value={settings.density} onChange={v=>setField('density',v)} suffix="%"/>
-            <div className="groove-note">Swing + humanize apply to playback and MIDI export immediately. Complexity + density apply on generation.</div>
+            <div className="groove-note">Swing + humanize affect MIDI export immediately and take effect on the next playback. Complexity + density apply on generation.</div>
           </div>
           <div className="mixer-content"><div className="mini-header">CHANNEL MIXER <span>{activeCount}/6 ACTIVE</span></div>{TRACKS.map(t=>{
             const lane=mixer[t.id]||initialMixer[t.id];

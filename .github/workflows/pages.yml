@@ -1,0 +1,48 @@
+name: Deploy PhianoSheets to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      # Rung 1 does not yet have a committed lockfile. Do not enable npm caching/ci until it does.
+      - name: Install dependencies
+        run: npm install --no-audit --no-fund
+      - name: Test music engine
+        run: npm run test
+      - name: Build & smoke-test GitHub Pages output
+        run: npm run check:pages
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload production site
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: ./dist
+      - name: Publish site
+        id: deployment
+        uses: actions/deploy-pages@v4
+      - name: Verify public page and assets
+        run: node scripts/check-pages-live.mjs "${{ steps.deployment.outputs.page_url }}"
