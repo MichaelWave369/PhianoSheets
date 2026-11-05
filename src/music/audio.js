@@ -1,11 +1,13 @@
 import Soundfont from 'soundfont-player';
 import { TRACKS } from './generator.js';
 import { scheduleSong } from './schedule.js';
+import { chooseRegion } from './sample-bank.js';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
 const midiFreq = pitch => 440 * Math.pow(2, (pitch - 69) / 12);
 const WAV_MAX_SECONDS = 240;
+export const STEM_MAX_SECONDS = 120;
 const DEFAULT_WAVE = { bass:'sawtooth', chords:'triangle', melody:'sine', arp:'triangle', lead:'square' };
-export const INSTRUMENTS = ['auto', 'sine', 'triangle', 'sawtooth', 'square', 'pluck'];
+export const INSTRUMENTS = ['auto', 'local', 'sine', 'triangle', 'sawtooth', 'square', 'pluck'];
 
 function assign(parameter, value, at, immediate = false) {
   if (immediate) parameter.setValueAtTime(value, at);
@@ -19,6 +21,7 @@ export class AudioEngine {
     this.master = null;
     this.channels = {};
     this.sf = {};
+    this.sampleBanks = {};
     this.timer = null;
     this.active = new Set();
     this.song = null;
@@ -116,6 +119,12 @@ export class AudioEngine {
     }
   }
 
+  setSampleBank(id, bank) {
+    if (!TRACKS.some(t=>t.id===id) || id==='drums') throw Error('Local banks require a pitched track');
+    if (!bank?.regions?.length) throw Error('Invalid local sample bank');
+    this.sampleBanks[id] = bank;
+  }
+
   async loadSoundfonts() {
     await this.ensure();
     let loaded = 0;
@@ -179,6 +188,11 @@ export class AudioEngine {
     const volume = n.velocity / 127;
     if (track.id === 'drums') { this.drum(n.pitch, when, volume); return; }
     const choice = this.mixer[track.id]?.instrument || 'auto';
+    if (choice === 'local' && this.sampleBanks[track.id]) {
+      const region = chooseRegion(this.sampleBanks[track.id], n.pitch, n.velocity);
+      if (region) { this.sample(region, n.pitch, when, duration, volume, track.id); return; }
+      // Key/velocity gaps fall back to a built-in synth rather than silence.
+    }
     if (allowSoundfont && choice === 'auto' && this.sf[track.id]) {
       try {
         const playing = this.sf[track.id].play(n.pitch, when, duration, { gain: volume * .75 });
@@ -187,6 +201,30 @@ export class AudioEngine {
       } catch { /* Fall back to a built-in voice. */ }
     }
     this.synth(track.id, n.pitch, when, duration, volume, choice);
+  }
+
+  sample(region, pitch, when, duration, velocity, id) {
+    const context=this.ctx;
+    const src=context.createBufferSource();
+    src.buffer=region.buffer;
+    const cents=(pitch-region.root)*100+(region.tune||0);
+    src.playbackRate.setValueAtTime(Math.pow(2,cents/1200),when);
+    const g=context.createGain();
+    const amplitude=clamp(velocity*(region.gain??1)*.7,.0001,1.5);
+    const attack=clamp(region.attack??.005,.001,2);
+    const release=clamp(region.release??.09,.01,5);
+    const until=when+Math.max(.02,duration);
+    g.gain.setValueAtTime(.0001,when);
+    g.gain.linearRampToValueAtTime(amplitude,when+Math.min(attack,duration/2));
+    g.gain.setValueAtTime(amplitude,until);
+    g.gain.linearRampToValueAtTime(.0001,until+release);
+    if (region.loop && region.loopEnd>region.loopStart) {
+      src.loop=true;
+      src.loopStart=region.loopStart;
+      src.loopEnd=region.loopEnd;
+    }
+    src.connect(g);g.connect(this.channels[id].gain);
+    this.source(src);src.start(when);src.stop(until+release+.015);
   }
 
   oscillator(type, freq, when, duration, volume, destination, filterFreq, pluck = false) {
@@ -271,21 +309,33 @@ export class AudioEngine {
 }
 
 /** Offline bounce: same note timing, oscillator voices, mixer and FX as live preview.
- * Loaded network SoundFonts cannot be rendered in this first version; auto uses synth. */
-export async function renderAudio(song, mixer = {}, master = .72) {
+ * Locally loaded sample banks render in WAV when voice is LOCAL; remote GM patches remain audition-only. */
+export async function renderAudio(song, mixer = {}, master = .72, options = {}) {
   const OfflineContext = window.OfflineAudioContext || window.webkitOfflineAudioContext;
   if (!OfflineContext) throw new Error('Offline audio rendering is not supported in this browser.');
   const plan = scheduleSong(song);
-  if (plan.duration > WAV_MAX_SECONDS)
-    throw new Error('WAV export is limited to 4 minutes. Shorten the arrangement or raise its tempo.');
+  const stem=options.stemTrackId;
+  if (stem && !TRACKS.some(t=>t.id===stem)) throw new Error('Unknown stem track');
+  if (plan.duration > (stem ? STEM_MAX_SECONDS : WAV_MAX_SECONDS))
+    throw new Error(stem ? 'Stem export is limited to 2 minutes per song.' :
+      'WAV export is limited to 4 minutes. Shorten the arrangement or raise its tempo.');
   const sampleRate = 44100;
   const frames = Math.ceil((plan.duration + 2.0) * sampleRate);
   const ctx = new OfflineContext(2, frames, sampleRate);
   const engine = new AudioEngine();
   engine.setup(ctx);
-  engine.setMixer(mixer, true);
+  // Preserve channel sound settings while isolating the chosen stem from
+  // playback's global Solo state, even if that track was muted for audition.
+  const effectiveMixer = stem ? Object.fromEntries(TRACKS.map(t=>[
+    t.id, {...(mixer[t.id]||{}), mute:t.id!==stem, solo:false}
+  ])) : mixer;
+  engine.sampleBanks=options.sampleBanks||{};
+  engine.setMixer(effectiveMixer, true);
   engine.setMaster(master, true);
   engine.setTempo(plan.bpm, true);
-  for (const event of plan.events) engine.sound(event, event.time + .08, false);
+  for (const event of plan.events) {
+    if (stem && event.track.id!==stem) continue;
+    engine.sound(event, event.time + .08, false);
+  }
   return ctx.startRendering();
 }

@@ -48,3 +48,16 @@
 .wav-note{margin-top:-6px;padding:0 5px 4px;font:10px 'DM Sans',sans-serif;color:#91a7b5;line-height:1.5}
 .export-panel{flex-wrap:wrap}.export-actions{flex-wrap:wrap}
 @media(max-width:700px){.soundlab-params{gap:8px}.wav-export-btn{flex-grow:1}}
+
+
+/* Rung 3B: local instrument bank picker and single-download stem archive */
+.local-sample-box{background:#101c2b;border:1px solid #34485c;border-radius:5px;margin-top:9px;padding:9px}
+.local-bank-status{font:9px 'DM Mono',monospace;color:#94a6bd;line-height:1.5;word-break:break-word}
+.local-bank-ready{color:#a4d6b8}
+.local-bank-picker{display:block;cursor:pointer;border:1px solid #465b70;border-radius:4px;padding:8px 7px;margin-top:7px;text-align:center;font:600 9px 'DM Mono',monospace;letter-spacing:.3px;background:#1b3041;color:#d1e3ef}
+.local-bank-picker:focus-within{outline:2px solid #d6ab6d}
+.local-sample-box small{display:block;font:9px 'DM Sans',sans-serif;color:#728ca5;line-height:1.5;margin-top:8px}
+.sf2-preset{display:block;margin-top:9px;color:#91a6bb;font:9px 'DM Mono'}
+.sf2-preset select{display:block;width:100%;margin-top:4px;background:#0c1726;border:1px solid #47617b;color:#eed9b4;border-radius:4px;padding:8px 6px;font:10px 'DM Mono'}
+.stem-export-btn{display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 13px;border-radius:4px;border:1px solid #597a9b;background:#1b344c;color:#c8e2f8;font:600 10px 'DM Mono',monospace;white-space:nowrap}
+.stem-export-btn:disabled{opacity:.5;cursor:progress}
