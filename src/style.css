@@ -61,3 +61,10 @@
 .sf2-preset select{display:block;width:100%;margin-top:4px;background:#0c1726;border:1px solid #47617b;color:#eed9b4;border-radius:4px;padding:8px 6px;font:10px 'DM Mono'}
 .stem-export-btn{display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 13px;border-radius:4px;border:1px solid #597a9b;background:#1b344c;color:#c8e2f8;font:600 10px 'DM Mono',monospace;white-space:nowrap}
 .stem-export-btn:disabled{opacity:.5;cursor:progress}
+
+
+/* Rung 3C: FL Studio Production Pack handoff */
+.pack-export-btn{display:flex;align-items:center;justify-content:center;gap:7px;padding:11px 13px;border-radius:4px;border:1px solid #e4b274;background:linear-gradient(120deg,#dfbb83,#bb925d);color:#17202b;font:700 10px 'DM Mono',monospace;white-space:nowrap}
+.pack-export-btn:disabled{opacity:.48;cursor:progress}
+.export-progress{align-self:stretch;margin-top:-5px;padding:9px 12px;border-radius:4px;border:1px solid #3e5363;background:#152738;color:#a9dfce;font:500 10px 'DM Mono',monospace;letter-spacing:.3px}
+@media(max-width:650px){.pack-export-btn{flex:1 1 auto}}

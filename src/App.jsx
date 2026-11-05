@@ -3,6 +3,7 @@ import { AudioEngine, renderAudio } from './music/audio.js';
 import { downloadWav, encodeWavPCM16 } from './music/wav.js';
 import { loadLocalBank } from './music/sample-bank.js';
 import { downloadZip } from './music/zip.js';
+import { buildProductionPackEntries } from './music/production-pack.js';
 import SoundLabChannel from './components/SoundLabChannel.jsx';
 import { createSong, DEFAULT_SETTINGS, ROOTS, SCALES, STYLES, TRACKS, STEPS_PER_BAR } from './music/generator.js';
 import { downloadMidi } from './music/midi.js';
@@ -62,6 +63,7 @@ function App(){
   const [master,setMaster]=useState(first.master);
   const [soundfontStatus,setSoundfontStatus]=useState('Built-in synth ready');
   const [exportingAudio,setExportingAudio]=useState(false);
+  const [exportProgress,setExportProgress]=useState('');
   const [bankBusy,setBankBusy]=useState(null);
   const [localBankInfo,setLocalBankInfo]=useState({});
   const [error,setError]=useState('');
@@ -187,21 +189,41 @@ function App(){
     }catch(e){setError('WAV export failed: '+(e?.message||'Unable to render audio'));}
     finally{setExportingAudio(false);}
   };
+  // Shared offline renderer for both bare WAV stems and the complete DAW pack.
+  // Render one lane at a time; preserve the same initial timeline for every lane.
+  const renderAllStems=async()=>{
+    verifyLocalBanks();
+    const banks=engine.current.sampleBanks;
+    const stems=[];
+    for(const [index,track] of TRACKS.entries()){
+      setExportProgress('Rendering '+track.short+' · '+(index+1)+'/'+TRACKS.length);
+      const audio=await renderAudio(song,mixer,master,{
+        stemTrackId:track.id,sampleBanks:banks
+      });
+      stems.push({id:track.id,name:track.id+'.wav',bytes:encodeWavPCM16(audio)});
+    }
+    return stems;
+  };
   const exportStems=async()=>{
     if(exportingAudio)return;
     stop(false);setError('');setExportingAudio(true);
     try{
-      verifyLocalBanks();
-      const stems=[];
-      for(const track of TRACKS){
-        const audio=await renderAudio(song,mixer,master,{
-          stemTrackId:track.id,sampleBanks:engine.current.sampleBanks
-        });
-        stems.push({name:track.id+'.wav',bytes:encodeWavPCM16(audio)});
-      }
+      const stems=await renderAllStems();
+      setExportProgress('Packaging WAV stems…');
       downloadZip(stems,song.settings.title);
     }catch(e){setError('Stem export failed: '+(e?.message||'Unable to render stems'));}
-    finally{setExportingAudio(false);}
+    finally{setExportingAudio(false);setExportProgress('');}
+  };
+  const exportPack=async()=>{
+    if(exportingAudio)return;
+    stop(false);setError('');setExportingAudio(true);
+    try{
+      const stems=await renderAllStems();
+      setExportProgress('Packaging DAW handoff…');
+      const entries=buildProductionPackEntries({song,mixer,master,stems});
+      downloadZip(entries,song.settings.title,'production-pack');
+    }catch(e){setError('Production Pack failed: '+(e?.message||'Unable to build DAW package'));}
+    finally{setExportingAudio(false);setExportProgress('');}
   };
   const updateNotes=(id,notes)=>{
     stop(false);commitSong({...songRef.current,tracks:{...songRef.current.tracks,[id]:notes}});
@@ -257,14 +279,14 @@ function App(){
   return <div className="shell">
     <header className="site-header">
       <div className="brand"><div className="brand-mark"><span>Φ</span></div><div><div className="brand-name">PHIANO<span>SHEETS</span><sup>369</sup></div><div className="brand-tagline">THE MIDI IDEA MACHINE</div></div></div>
-      <nav className="top-nav"><span className="nav-current">STUDIO <span className="nav-dot"/></span><span className="nav-passive">GEN ENGINE V0.3B</span></nav>
+      <nav className="top-nav"><span className="nav-current">STUDIO <span className="nav-dot"/></span><span className="nav-passive">GEN ENGINE V0.3C</span></nav>
       <div className="header-actions"><span className="online-indicator"><span/> LOCAL-FIRST ENGINE</span><button className="icon-btn" onClick={()=>setShowInfo(s=>!s)} title="About PhianoSheets"><Icon name="help"/></button><a className="github-link" href="https://github.com/MichaelWave369/PhianoSheets" target="_blank" rel="noreferrer">GITHUB ↗</a></div>
     </header>
 
     <main className="main-area">
       <div className="heading-row"><div><div className="eyebrow"><span className="tiny-diamond">◆</span> PHI369 LABS PRESENTS <span className="eyebrow-line"/></div><h1>Make something <em>move.</em></h1><p className="subtitle">Generate an idea. Find the pocket. Make it yours. Every note is real MIDI.</p></div>
         <div className="session-stat"><div className="session-led">◌ <span>LIVE SESSION</span></div><strong>{totalNotes.toLocaleString()}</strong><small>GENERATED NOTES</small></div></div>
-      {showInfo&&<div className="info-panel"><strong>What is PhianoSheets?</strong><p>A free, MIT-licensed MIDI composition sandbox. Generate complete arrangements, edit notes, audition them in your browser and export standard multitrack MIDI. Built-in synthesis works offline after first load; optional SoundFont patches need internet. Native VST3/AU plugin and raw SF2 uploads belong to future phases.</p><button onClick={()=>setShowInfo(false)}>Close</button></div>}
+      {showInfo&&<div className="info-panel"><strong>What is PhianoSheets?</strong><p>A free, MIT-licensed MIDI composition sandbox. Generate complete arrangements, edit notes, audition them in your browser and export standard multitrack MIDI. Built-in synthesis works offline after first load; optional SoundFont patches need internet. Local SF2/SFZ/WAV sampling and six-track WAV stems are supported. Native VST3/AU plugin builds belong to later phases.</p><button onClick={()=>setShowInfo(false)}>Close</button></div>}
       {error&&<div role="alert" className="error-bar">{error} <button onClick={()=>setError('')}>Dismiss</button></div>}
       <div className="workspace">
         <aside className="generator-sidebar">
@@ -301,8 +323,8 @@ function App(){
               onChordChange={changeChord} onMoveSection={reorderSection} onCopy={copySelectedClip}
               onPaste={pasteSelectedClip} onToggleDrum={toggleStep} onFill={fillBar} onEuclid={euclid}/>
            <PianoRoll song={song} trackId={selectedTrack} bar={Math.floor(selectedBar/2)*2} onChange={updateNotes}/>
-          <div className="export-panel"><div><span className="export-asterisk">✳</span><div><strong>GOOD IDEAS DESERVE TO LEAVE THE BROWSER.</strong><p>Take your arrangement into FL Studio, Ableton, Reaper, Logic, or any MIDI-capable DAW.</p></div></div><div className="export-actions"><button className="secondary-btn" onClick={()=>downloadJson({version:4,settings,song,mixer,master},settings.title)}><Icon name="disk" size={15}/> SAVE PROJECT</button><button className="export-btn" onClick={()=>downloadMidi(song,mixer)}><Icon name="download" size={16}/> EXPORT MIDI</button><button className="wav-export-btn" disabled={exportingAudio} onClick={exportAudio}><Icon name="download" size={16}/> {exportingAudio?'RENDERING…':'EXPORT WAV'}</button><button className="stem-export-btn" disabled={exportingAudio} onClick={exportStems}><Icon name="download" size={16}/> {exportingAudio?'RENDERING…':'STEMS ZIP'}</button><input ref={fileRef} type="file" hidden accept=".json,.phiano.json" onChange={importProject}/><input ref={midiRef} type="file" hidden accept=".mid,.midi,audio/midi" onChange={importMidiFile}/></div></div>
-          <div className="import-links"><button className="import-link" onClick={()=>fileRef.current?.click()}><Icon name="upload" size={15}/> IMPORT PROJECT JSON</button><button className="import-link" onClick={()=>midiRef.current?.click()}><Icon name="upload" size={15}/> IMPORT MIDI</button></div><div className="wav-note">WAV and stems include loaded local WAV/SFZ/SF2 samples, synth voices, mixer and FX. Online GM SoundFonts remain audition-only. Stem ZIP is limited to 2-minute songs.</div>
+          <div className="export-panel"><div><span className="export-asterisk">✳</span><div><strong>GOOD IDEAS DESERVE TO LEAVE THE BROWSER.</strong><p>Take your arrangement into FL Studio, Ableton, Reaper, Logic, or any MIDI-capable DAW.</p></div></div><div className="export-actions"><button className="secondary-btn" onClick={()=>downloadJson({version:4,settings,song,mixer,master},settings.title)}><Icon name="disk" size={15}/> SAVE PROJECT</button><button className="export-btn" onClick={()=>downloadMidi(song,mixer)}><Icon name="download" size={16}/> EXPORT MIDI</button><button className="wav-export-btn" disabled={exportingAudio} onClick={exportAudio}><Icon name="download" size={16}/> {exportingAudio?'RENDERING…':'EXPORT WAV'}</button><button className="stem-export-btn" disabled={exportingAudio} onClick={exportStems}><Icon name="download" size={16}/> {exportingAudio?'RENDERING…':'STEMS ZIP'}</button><button className="pack-export-btn" disabled={exportingAudio} onClick={exportPack}><Icon name="download" size={16}/> {exportingAudio?'WORKING…':'DAW PACK ZIP'}</button><input ref={fileRef} type="file" hidden accept=".json,.phiano.json" onChange={importProject}/><input ref={midiRef} type="file" hidden accept=".mid,.midi,audio/midi" onChange={importMidiFile}/></div></div>
+          <div className="import-links"><button className="import-link" onClick={()=>fileRef.current?.click()}><Icon name="upload" size={15}/> IMPORT PROJECT JSON</button><button className="import-link" onClick={()=>midiRef.current?.click()}><Icon name="upload" size={15}/> IMPORT MIDI</button></div><div className="wav-note">WAV and stems include local WAV/SFZ/SF2 samples, synth voices, mixer and FX. Online GM SoundFonts remain audition-only. Six-stem and DAW Pack exports require songs under 2 minutes.</div>{exportProgress&&<div role="status" className="export-progress">{exportProgress}</div>}
         </section>
 
         <aside className="mixer-sidebar"><div className="panel-heading"><span className="panel-number">04</span><h2>GROOVE & MIXER</h2><Icon name="headphones" size={18}/></div>
@@ -324,7 +346,7 @@ function App(){
           <div className="soundfont-block"><div><span className="sf-icon">▧</span><strong>SOUNDFONT PLAYER</strong></div><p>Instant built-in synth, or load sampled GM instrument patches when online.</p><button onClick={loadFonts} disabled={soundfontStatus.startsWith('Loading')}>LOAD GM SOUNDFONTS</button><small>{soundfontStatus}</small></div>
         </aside>
       </div>
-      <footer className="site-footer"><span>Φ369 LABS / PHIANOSHEETS v0.3B</span><span>BUILT FOR MUSIC MAKERS, NOT GATEKEEPERS.</span><span>OPEN SOURCE · MIT LICENSE</span></footer>
+      <footer className="site-footer"><span>Φ369 LABS / PHIANOSHEETS v0.3C</span><span>BUILT FOR MUSIC MAKERS, NOT GATEKEEPERS.</span><span>OPEN SOURCE · MIT LICENSE</span></footer>
     </main>
   </div>;
 }
