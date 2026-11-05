@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AudioEngine, renderAudio } from './music/audio.js';
-import { downloadWav } from './music/wav.js';
+import { downloadWav, encodeWavPCM16 } from './music/wav.js';
+import { loadLocalBank } from './music/sample-bank.js';
+import { downloadZip } from './music/zip.js';
 import SoundLabChannel from './components/SoundLabChannel.jsx';
 import { createSong, DEFAULT_SETTINGS, ROOTS, SCALES, STYLES, TRACKS, STEPS_PER_BAR } from './music/generator.js';
 import { downloadMidi } from './music/midi.js';
@@ -60,9 +62,12 @@ function App(){
   const [master,setMaster]=useState(first.master);
   const [soundfontStatus,setSoundfontStatus]=useState('Built-in synth ready');
   const [exportingAudio,setExportingAudio]=useState(false);
+  const [bankBusy,setBankBusy]=useState(null);
+  const [localBankInfo,setLocalBankInfo]=useState({});
   const [error,setError]=useState('');
   const [showInfo,setShowInfo]=useState(false);
   const engine=useRef(null), fileRef=useRef(null), midiRef=useRef(null);
+  const sampleSources=useRef({});
   const songRef=useRef(first.song);
   const history=useRef({past:[],future:[]});
   const [,refreshHistory]=useState(0);
@@ -149,13 +154,53 @@ function App(){
     generate({style:id,bpm:style?.tempo||92},false);
   };
   const updateMixer=(id,field,val)=>setMixer(s=>({...s,[id]:{...s[id],[field]:val}}));
+  const loadBank=async (id,files,presetIndex=0)=>{
+    if(!files?.length)return;
+    stop(false);setError('');setBankBusy(id);
+    try {
+      await engine.current.ensure();
+      const bank=await loadLocalBank(files,engine.current.ctx,presetIndex);
+      engine.current.setSampleBank(id,bank);
+      sampleSources.current[id]=files;
+      setLocalBankInfo(s=>({...s,[id]:{
+        name:bank.name,presets:bank.presets||[],presetIndex
+      }}));
+      updateMixer(id,'instrument','local');
+    }catch(error){setError('Local sample import: '+(error?.message||'Invalid sample bank'));}
+    finally{setBankBusy(null);}
+  };
+  const changePreset=(id,presetIndex)=>{
+    const files=sampleSources.current[id];
+    if(files?.length)void loadBank(id,files,presetIndex);
+  };
+  const verifyLocalBanks=()=>{
+    const missing=TRACKS.filter(t=>mixer[t.id]?.instrument==='local'&&!engine.current.sampleBanks[t.id]);
+    if(missing.length)throw Error('Reload local samples for '+missing.map(t=>t.short).join(', ')+' before WAV/stem export.');
+  };
   const exportAudio=async()=>{
     if(exportingAudio)return;
     stop(false);setError('');setExportingAudio(true);
     try{
-      const rendered=await renderAudio(song,mixer,master);
+      verifyLocalBanks();
+      const rendered=await renderAudio(song,mixer,master,{sampleBanks:engine.current.sampleBanks});
       downloadWav(rendered,song.settings.title);
     }catch(e){setError('WAV export failed: '+(e?.message||'Unable to render audio'));}
+    finally{setExportingAudio(false);}
+  };
+  const exportStems=async()=>{
+    if(exportingAudio)return;
+    stop(false);setError('');setExportingAudio(true);
+    try{
+      verifyLocalBanks();
+      const stems=[];
+      for(const track of TRACKS){
+        const audio=await renderAudio(song,mixer,master,{
+          stemTrackId:track.id,sampleBanks:engine.current.sampleBanks
+        });
+        stems.push({name:track.id+'.wav',bytes:encodeWavPCM16(audio)});
+      }
+      downloadZip(stems,song.settings.title);
+    }catch(e){setError('Stem export failed: '+(e?.message||'Unable to render stems'));}
     finally{setExportingAudio(false);}
   };
   const updateNotes=(id,notes)=>{
@@ -185,6 +230,7 @@ function App(){
       const project=JSON.parse(await file.text());
       if(!project.settings||!project.song?.tracks||!project.mixer||!TRACKS.every(t=>Array.isArray(project.song.tracks[t.id])))throw Error('Invalid PhianoSheets project file');
       stop();
+      engine.current.sampleBanks={};sampleSources.current={};setLocalBankInfo({});
       const restored=normalizeSong(project.song);
       commitSong(restored);
       setSettings({...DEFAULT_SETTINGS,...project.settings,...restored.settings});
@@ -211,7 +257,7 @@ function App(){
   return <div className="shell">
     <header className="site-header">
       <div className="brand"><div className="brand-mark"><span>Φ</span></div><div><div className="brand-name">PHIANO<span>SHEETS</span><sup>369</sup></div><div className="brand-tagline">THE MIDI IDEA MACHINE</div></div></div>
-      <nav className="top-nav"><span className="nav-current">STUDIO <span className="nav-dot"/></span><span className="nav-passive">GEN ENGINE V0.3</span></nav>
+      <nav className="top-nav"><span className="nav-current">STUDIO <span className="nav-dot"/></span><span className="nav-passive">GEN ENGINE V0.3B</span></nav>
       <div className="header-actions"><span className="online-indicator"><span/> LOCAL-FIRST ENGINE</span><button className="icon-btn" onClick={()=>setShowInfo(s=>!s)} title="About PhianoSheets"><Icon name="help"/></button><a className="github-link" href="https://github.com/MichaelWave369/PhianoSheets" target="_blank" rel="noreferrer">GITHUB ↗</a></div>
     </header>
 
@@ -255,8 +301,8 @@ function App(){
               onChordChange={changeChord} onMoveSection={reorderSection} onCopy={copySelectedClip}
               onPaste={pasteSelectedClip} onToggleDrum={toggleStep} onFill={fillBar} onEuclid={euclid}/>
            <PianoRoll song={song} trackId={selectedTrack} bar={Math.floor(selectedBar/2)*2} onChange={updateNotes}/>
-          <div className="export-panel"><div><span className="export-asterisk">✳</span><div><strong>GOOD IDEAS DESERVE TO LEAVE THE BROWSER.</strong><p>Take your arrangement into FL Studio, Ableton, Reaper, Logic, or any MIDI-capable DAW.</p></div></div><div className="export-actions"><button className="secondary-btn" onClick={()=>downloadJson({version:3,settings,song,mixer,master},settings.title)}><Icon name="disk" size={15}/> SAVE PROJECT</button><button className="export-btn" onClick={()=>downloadMidi(song,mixer)}><Icon name="download" size={16}/> EXPORT MIDI</button><button className="wav-export-btn" disabled={exportingAudio} onClick={exportAudio}><Icon name="download" size={16}/> {exportingAudio?'RENDERING WAV…':'EXPORT WAV'}</button><input ref={fileRef} type="file" hidden accept=".json,.phiano.json" onChange={importProject}/><input ref={midiRef} type="file" hidden accept=".mid,.midi,audio/midi" onChange={importMidiFile}/></div></div>
-          <div className="import-links"><button className="import-link" onClick={()=>fileRef.current?.click()}><Icon name="upload" size={15}/> IMPORT PROJECT JSON</button><button className="import-link" onClick={()=>midiRef.current?.click()}><Icon name="upload" size={15}/> IMPORT MIDI</button></div><div className="wav-note">WAV bounce uses built-in synth voices and the current mixer/FX. Loaded online SoundFonts are audition-only for now.</div>
+          <div className="export-panel"><div><span className="export-asterisk">✳</span><div><strong>GOOD IDEAS DESERVE TO LEAVE THE BROWSER.</strong><p>Take your arrangement into FL Studio, Ableton, Reaper, Logic, or any MIDI-capable DAW.</p></div></div><div className="export-actions"><button className="secondary-btn" onClick={()=>downloadJson({version:4,settings,song,mixer,master},settings.title)}><Icon name="disk" size={15}/> SAVE PROJECT</button><button className="export-btn" onClick={()=>downloadMidi(song,mixer)}><Icon name="download" size={16}/> EXPORT MIDI</button><button className="wav-export-btn" disabled={exportingAudio} onClick={exportAudio}><Icon name="download" size={16}/> {exportingAudio?'RENDERING…':'EXPORT WAV'}</button><button className="stem-export-btn" disabled={exportingAudio} onClick={exportStems}><Icon name="download" size={16}/> {exportingAudio?'RENDERING…':'STEMS ZIP'}</button><input ref={fileRef} type="file" hidden accept=".json,.phiano.json" onChange={importProject}/><input ref={midiRef} type="file" hidden accept=".mid,.midi,audio/midi" onChange={importMidiFile}/></div></div>
+          <div className="import-links"><button className="import-link" onClick={()=>fileRef.current?.click()}><Icon name="upload" size={15}/> IMPORT PROJECT JSON</button><button className="import-link" onClick={()=>midiRef.current?.click()}><Icon name="upload" size={15}/> IMPORT MIDI</button></div><div className="wav-note">WAV and stems include loaded local WAV/SFZ/SF2 samples, synth voices, mixer and FX. Online GM SoundFonts remain audition-only. Stem ZIP is limited to 2-minute songs.</div>
         </section>
 
         <aside className="mixer-sidebar"><div className="panel-heading"><span className="panel-number">04</span><h2>GROOVE & MIXER</h2><Icon name="headphones" size={18}/></div>
@@ -269,14 +315,16 @@ function App(){
           </div>
           <div className="mixer-content"><div className="mini-header">CHANNEL MIXER <span>{activeCount}/6 ACTIVE</span></div>{TRACKS.map(t=>{
             const lane=mixer[t.id]||initialMixer[t.id];
-            return <div className="mixer-channel" key={t.id} style={{'--accent':t.color}}><div className="channel-top"><span className="channel-led"/><strong>{t.short}</strong><div className="channel-buttons"><button aria-label={`Mute ${t.name}`} className={lane.mute?'engaged':''} onClick={()=>updateMixer(t.id,'mute',!lane.mute)}>M</button><button aria-label={`Solo ${t.name}`} className={lane.solo?'engaged solo':''} onClick={()=>updateMixer(t.id,'solo',!lane.solo)}>S</button></div></div><div className="fader-line"><span>VOL</span><input aria-label={`${t.name} volume`} type="range" min="0" max="1.5" step="0.01" value={lane.volume} onChange={e=>updateMixer(t.id,'volume',Number(e.target.value))}/><span>{Math.round(lane.volume*100)}%</span></div><div className="fader-line pan-line"><span>PAN</span><input aria-label={`${t.name} pan`} type="range" min="-1" max="1" step="0.05" value={lane.pan} onChange={e=>updateMixer(t.id,'pan',Number(e.target.value))}/><span>{lane.pan===0?'C':lane.pan<0?`L${Math.round(-lane.pan*100)}`:`R${Math.round(lane.pan*100)}`}</span></div><SoundLabChannel track={t} lane={lane} onChange={(field,value)=>updateMixer(t.id,field,value)}/></div>;
+            return <div className="mixer-channel" key={t.id} style={{'--accent':t.color}}><div className="channel-top"><span className="channel-led"/><strong>{t.short}</strong><div className="channel-buttons"><button aria-label={`Mute ${t.name}`} className={lane.mute?'engaged':''} onClick={()=>updateMixer(t.id,'mute',!lane.mute)}>M</button><button aria-label={`Solo ${t.name}`} className={lane.solo?'engaged solo':''} onClick={()=>updateMixer(t.id,'solo',!lane.solo)}>S</button></div></div><div className="fader-line"><span>VOL</span><input aria-label={`${t.name} volume`} type="range" min="0" max="1.5" step="0.01" value={lane.volume} onChange={e=>updateMixer(t.id,'volume',Number(e.target.value))}/><span>{Math.round(lane.volume*100)}%</span></div><div className="fader-line pan-line"><span>PAN</span><input aria-label={`${t.name} pan`} type="range" min="-1" max="1" step="0.05" value={lane.pan} onChange={e=>updateMixer(t.id,'pan',Number(e.target.value))}/><span>{lane.pan===0?'C':lane.pan<0?`L${Math.round(-lane.pan*100)}`:`R${Math.round(lane.pan*100)}`}</span></div><SoundLabChannel track={t} lane={lane} onChange={(field,value)=>updateMixer(t.id,field,value)}
+              bank={localBankInfo[t.id]} bankBusy={bankBusy===t.id}
+              onLoadBank={loadBank} onPresetChange={changePreset}/></div>;
           })}
             <div className="master-fader"><Slider label="MASTER OUTPUT" value={Math.round(master*100)} onChange={v=>setMaster(v/100)} suffix="%"/></div>
           </div>
           <div className="soundfont-block"><div><span className="sf-icon">▧</span><strong>SOUNDFONT PLAYER</strong></div><p>Instant built-in synth, or load sampled GM instrument patches when online.</p><button onClick={loadFonts} disabled={soundfontStatus.startsWith('Loading')}>LOAD GM SOUNDFONTS</button><small>{soundfontStatus}</small></div>
         </aside>
       </div>
-      <footer className="site-footer"><span>Φ369 LABS / PHIANOSHEETS v0.3</span><span>BUILT FOR MUSIC MAKERS, NOT GATEKEEPERS.</span><span>OPEN SOURCE · MIT LICENSE</span></footer>
+      <footer className="site-footer"><span>Φ369 LABS / PHIANOSHEETS v0.3B</span><span>BUILT FOR MUSIC MAKERS, NOT GATEKEEPERS.</span><span>OPEN SOURCE · MIT LICENSE</span></footer>
     </main>
   </div>;
 }

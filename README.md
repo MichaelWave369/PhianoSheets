@@ -51,6 +51,23 @@ An offline render needs to hold the whole audio buffer in memory, so WAV export 
 
 Direct local \`.sf2\`/\`.sfz\` ingestion, additional sample layers, audio stems, reverb and effect automation remain for a following Rung 3B. No third-party samples have been added to this repository.
 
+## Rung 3B: Local sampler and WAV stems (v0.3B)
+
+The Sound Lab can now load **instrument samples from local files** without contacting a cloud service or including third-party samples in the repository.
+
+- **Single WAV:** Load a WAV sample and play it pitched from MIDI note C4 (60). This is a simple one-region sampler, not a chromatically multisampled instrument.
+- **SFZ plus WAV files:** Select an \`.sfz\` with its referenced WAV samples in the same picker, or select their folder using a browser with directory input support. Supported core regions and opcodes: \`<control> default_path\`, \`<global>\`, \`<group>\`, \`<region>\`, \`sample\`, \`key\`/\`lokey\`/\`hikey\`, \`lovel\`/\`hivel\`, \`pitch_keycenter\`, \`tune\`, \`volume\`, \`loop_mode\`, \`loop_start\`/\`loop_end\`, \`ampeg_attack\`/\`ampeg_release\`.
+- **SoundFont 2 (SF2):** A built-in limited RIFF/sfbk reader interprets preset/instrument/sample zones, basic pitch and velocity ranges, attenuation, tuning and mono PCM16 sample looping. Choose the preset in the Sound Lab after loading the file. More complex SF2 behaviors (stereo-linked zones, modulators, complete envelopes, effects, filter generators, and all SoundFont modulators) are **not** supported yet. Unsupported preset zones may be skipped.
+- **Audio stems:** The **STEMS ZIP** button creates six individual WAV files (\`drums.wav\`, \`bass.wav\`, \`chords.wav\`, \`melody.wav\`, \`arp.wav\`, \`lead.wav\`) inside one ZIP, with each track's sound choice, effects, pan, channel level and the master level. Tracks are rendered in isolation, ignoring live mute/solo state for inclusion. **Length limit: 2 minutes** due to browser memory pressure. The existing combined WAV export remains capped at 4 minutes. The ZIP uses stored/uncompressed entries.
+- **Offline parity:** Locally loaded sample banks can play in browser audition **and** are supplied to the offline WAV/stem renderer. Online GM SoundFonts from \`soundfont-player\` remain preview-only.
+- **Existing exports:** The six-track MIDI format 1 output is unchanged and remains the most faithful route into FL Studio for reassigning DAW instruments.
+
+**Local file privacy and persistence:** The browser reads local sample files only after you select them. Sample bytes are kept in memory, not uploaded, not copied into a \`.phiano.json\` project, and not saved to localStorage. Reload the samples after reopening a project or refreshing the page. If you selected LOCAL without loading the bank this session, WAV/stem export blocks with an explicit reload warning rather than silently substituting a synth.
+
+**Licensing:** Use samples and SoundFonts you have permission to load, redistribute or publish. This repository does not bundle third-party sample packs. SFZ includes a broad instrument language; this is a documented practical subset. Some commercial or elaborate banks may not play correctly.
+
+**Suggested field test:** Select a pitched track → LOAD SAMPLE FILES → select your SF2, WAV, or SFZ+WAVs → choose LOCAL SAMPLE BANK → listen → EXPORT WAV → open in FL Studio. For a shorter song, use STEMS ZIP and import the six WAV files as stems. Compare their timing against the original MIDI arrangement. Stereo stem summing may differ slightly from a combined master mix because each stem is compressed separately.
+
 ## Local development
 
 Node 20.19+ / Node 22.12+ recommended.
