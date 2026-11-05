@@ -2,8 +2,8 @@ import Soundfont from 'soundfont-player';
 import { TRACKS } from './generator.js';
 import { scheduleSong } from './schedule.js';
 import { chooseRegion } from './sample-bank.js';
+import { midiFrequency, normalizeA4, a4Cents } from './tuning.js';
 const clamp = (value, min, max) => Math.max(min, Math.min(max, Number(value) || 0));
-const midiFreq = pitch => 440 * Math.pow(2, (pitch - 69) / 12);
 const WAV_MAX_SECONDS = 240;
 export const STEM_MAX_SECONDS = 120;
 const DEFAULT_WAVE = { bass:'sawtooth', chords:'triangle', melody:'sine', arp:'triangle', lead:'square' };
@@ -29,6 +29,7 @@ export class AudioEngine {
     this.cursor = 0;
     this.isPlaying = false;
     this.mixer = {};
+    this.a4Hz = 440;
     this.onProgress = () => {};
     this.noise = null;
   }
@@ -146,6 +147,7 @@ export class AudioEngine {
     this.stop();
     await this.ensure();
     this.song = song;
+    this.a4Hz = normalizeA4(song.settings?.a4Hz);
     this.loop = loop;
     this.onProgress = onProgress || (() => {});
     this.setMixer(mixer);
@@ -193,7 +195,7 @@ export class AudioEngine {
       if (region) { this.sample(region, n.pitch, when, duration, volume, track.id); return; }
       // Key/velocity gaps fall back to a built-in synth rather than silence.
     }
-    if (allowSoundfont && choice === 'auto' && this.sf[track.id]) {
+    if (allowSoundfont && this.a4Hz === 440 && choice === 'auto' && this.sf[track.id]) {
       try {
         const playing = this.sf[track.id].play(n.pitch, when, duration, { gain: volume * .75 });
         if (playing && typeof playing.stop === 'function') this.active.add(playing);
@@ -207,7 +209,7 @@ export class AudioEngine {
     const context=this.ctx;
     const src=context.createBufferSource();
     src.buffer=region.buffer;
-    const cents=(pitch-region.root)*100+(region.tune||0);
+    const cents=(pitch-region.root)*100+(region.tune||0)+a4Cents(this.a4Hz);
     src.playbackRate.setValueAtTime(Math.pow(2,cents/1200),when);
     const g=context.createGain();
     const amplitude=clamp(velocity*(region.gain??1)*.7,.0001,1.5);
@@ -260,7 +262,7 @@ export class AudioEngine {
     const wave = INSTRUMENTS.includes(instrument) && instrument !== 'auto' && !pluck
       ? instrument : DEFAULT_WAVE[id] || 'sine';
     const cutoff = id === 'bass' ? 900 : id === 'lead' ? 2400 : 4300;
-    this.oscillator(pluck ? 'triangle' : wave, midiFreq(pitch), when,
+    this.oscillator(pluck ? 'triangle' : wave, midiFrequency(pitch, this.a4Hz), when,
       Math.max(.08, Math.min(duration, 4)), velocity, this.channels[id].gain,
       pluck ? 2500 : cutoff, pluck);
   }
@@ -323,6 +325,7 @@ export async function renderAudio(song, mixer = {}, master = .72, options = {}) 
   const frames = Math.ceil((plan.duration + 2.0) * sampleRate);
   const ctx = new OfflineContext(2, frames, sampleRate);
   const engine = new AudioEngine();
+  engine.a4Hz = normalizeA4(song.settings?.a4Hz);
   engine.setup(ctx);
   // Preserve channel sound settings while isolating the chosen stem from
   // playback's global Solo state, even if that track was muted for audition.

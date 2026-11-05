@@ -1,4 +1,5 @@
 import { PPQ, TRACKS, grooveNote } from './generator.js';
+import { a4PitchBend, normalizeA4 } from './tuning.js';
 const bytes = (...vals) => vals.map(v=>v & 255);
 const u16 = v => bytes(v>>8,v);
 const u32 = v => bytes(v>>>24,v>>>16,v>>>8,v);
@@ -25,6 +26,8 @@ function encodeTrack(events) {
 /** Standard MIDI File format 1, one playable track per arrangement lane. */
 export function buildMidi(song, mixer={}) {
   const bpm = Math.max(30,Math.min(300,Number(song.settings.bpm)||92));
+  const a4Hz = normalizeA4(song.settings?.a4Hz);
+  const bend = a4PitchBend(a4Hz);
   const tempo = Math.round(60000000/bpm);
   const conductor = encodeTrack([
     {tick:0,order:0,data:metaEvent(0x03,ascii(song.settings.title || 'PhianoSheets'))},
@@ -42,11 +45,20 @@ export function buildMidi(song, mixer={}) {
       {tick:0,order:1,data:[0xb0|channel,7,volume]},
       {tick:0,order:2,data:[0xb0|channel,10,pan]},
       ...(i===0?[]:[{tick:0,order:3,data:[0xc0|channel,track.program]}]),
+      ...(i===0 || a4Hz===440 ? [] : [
+        {tick:0,order:4,data:[0xb0|channel,101,0]},
+        {tick:0,order:5,data:[0xb0|channel,100,0]},
+        {tick:0,order:6,data:[0xb0|channel,6,2]},
+        {tick:0,order:7,data:[0xb0|channel,38,0]},
+        {tick:0,order:8,data:[0xb0|channel,101,127]},
+        {tick:0,order:9,data:[0xb0|channel,100,127]},
+        {tick:0,order:10,data:[0xe0|channel,bend&127,(bend>>7)&127]},
+      ]),
     ];
     for (const n of song.tracks[track.id] || []) {
       const g = grooveNote(n,song.settings,i);
-      events.push({tick:g.tick,order:10,data:[0x90|channel,g.pitch,g.velocity]});
-      events.push({tick:g.tick+g.durationTicks,order:5,data:[0x80|channel,g.pitch,0]});
+      events.push({tick:g.tick,order:20,data:[0x90|channel,g.pitch,g.velocity]});
+      events.push({tick:g.tick+g.durationTicks,order:15,data:[0x80|channel,g.pitch,0]});
     }
     return encodeTrack(events);
   });

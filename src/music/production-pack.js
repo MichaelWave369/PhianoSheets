@@ -1,6 +1,7 @@
 /** Portable DAW handoff with original MIDI, project, and six aligned WAV stems. */
 import { TRACKS } from './generator.js';
 import { buildMidi } from './midi.js';
+import { normalizeA4, a4Cents } from './tuning.js';
 
 const encoder = new TextEncoder();
 const PCM_SAMPLE_RATE = 44100;
@@ -50,6 +51,9 @@ export function createPackManifest(song, mixer, master, frames) {
     title:settings.title||'Untitled',tempoBpm:bpm,timeSignature:[4,4],bars,
     root:settings.root||'C',scale:settings.scale||'minor',
     seed:Number(settings.seed)||369,
+    tuning:{a4Hz:normalizeA4(settings.a4Hz),temperament:'12-TET',
+      centsFromA440:a4Cents(settings.a4Hz),midiPitchBendRangeSemitones:2,
+      note:'MIDI pitch bend is sent per pitched channel for non-440 A4. Confirm DAW/plugin support; WAV stems preserve the requested reference.'},
     notes:Object.values(song.tracks||{}).reduce((sum,lane)=>sum+lane.length,0),
     stemAudio:{format:'WAV',sampleRate:PCM_SAMPLE_RATE,channels:2,bitDepth:16,
       frames,framesStartAt:0,tailSeconds:2},
@@ -95,6 +99,8 @@ export function buildProductionPackEntries({song,mixer={},master=.72,stems}) {
     '3. Drag all six WAV files to bar 1 / time zero, on separate audio tracks.',
     '4. Alternatively import arrangement.mid to edit notes and instrument choices.',
     '5. Avoid double-playing MIDI instruments and the WAV stems.',
+    'Tuning reference: A4 = '+manifest.tuning.a4Hz+' Hz, 12-TET.',
+    'Non-440 MIDI uses +/-2-semitone pitch bend; verify destination plugin support.',
     '',
     'All stems start at zero and contain exactly '+frames+' audio frames.',
     'A two-second audio effect tail is included.',

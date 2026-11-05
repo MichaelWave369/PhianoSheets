@@ -9,6 +9,7 @@ import { createSong, DEFAULT_SETTINGS, ROOTS, SCALES, STYLES, TRACKS, STEPS_PER_
 import { downloadMidi } from './music/midi.js';
 import PianoRoll from './components/PianoRoll.jsx';
 import Workbench from './components/Workbench.jsx';
+import HarmonicLab from './components/HarmonicLab.jsx';
 import { regenerateTrack, setChordDegree, moveSection, toggleDrumStep, addDrumFill, setEuclideanDrums, copyClip, pasteClip, normalizeSong } from './music/editor.js';
 import { parseMidi } from './music/import.js';
 
@@ -138,9 +139,9 @@ function App(){
   // Keep lightweight playback/groove edits in sync without changing note composition.
   const setField=(field,val)=>{
     // Live playback has a precomputed event schedule; restart after timing changes.
-    if(['bpm','swing','humanize'].includes(field) && engine.current?.isPlaying) stop(false);
+    if(['bpm','swing','humanize','a4Hz'].includes(field) && engine.current?.isPlaying) stop(false);
     setSettings(s=>({...s,[field]:val}));
-    if(['bpm','swing','humanize','title'].includes(field)){
+    if(['bpm','swing','humanize','title','a4Hz'].includes(field)){
       const updated={...songRef.current,settings:{...songRef.current.settings,[field]:val}};
       songRef.current=updated;setSong(updated);
     }
@@ -279,7 +280,7 @@ function App(){
   return <div className="shell">
     <header className="site-header">
       <div className="brand"><div className="brand-mark"><span>Φ</span></div><div><div className="brand-name">PHIANO<span>SHEETS</span><sup>369</sup></div><div className="brand-tagline">THE MIDI IDEA MACHINE</div></div></div>
-      <nav className="top-nav"><span className="nav-current">STUDIO <span className="nav-dot"/></span><span className="nav-passive">GEN ENGINE V0.3C</span></nav>
+      <nav className="top-nav"><span className="nav-current">STUDIO <span className="nav-dot"/></span><span className="nav-passive">GEN ENGINE V0.4 · HARMONIC LAB</span></nav>
       <div className="header-actions"><span className="online-indicator"><span/> LOCAL-FIRST ENGINE</span><button className="icon-btn" onClick={()=>setShowInfo(s=>!s)} title="About PhianoSheets"><Icon name="help"/></button><a className="github-link" href="https://github.com/MichaelWave369/PhianoSheets" target="_blank" rel="noreferrer">GITHUB ↗</a></div>
     </header>
 
@@ -322,9 +323,10 @@ function App(){
               clipboard={clipboard} onUndo={undo} onRedo={redo} onRegenerate={regenerateSelected}
               onChordChange={changeChord} onMoveSection={reorderSection} onCopy={copySelectedClip}
               onPaste={pasteSelectedClip} onToggleDrum={toggleStep} onFill={fillBar} onEuclid={euclid}/>
+           <HarmonicLab a4Hz={song.settings.a4Hz ?? 440} onA4Change={hz=>setField('a4Hz',hz)}/>
            <PianoRoll song={song} trackId={selectedTrack} bar={Math.floor(selectedBar/2)*2} onChange={updateNotes}/>
           <div className="export-panel"><div><span className="export-asterisk">✳</span><div><strong>GOOD IDEAS DESERVE TO LEAVE THE BROWSER.</strong><p>Take your arrangement into FL Studio, Ableton, Reaper, Logic, or any MIDI-capable DAW.</p></div></div><div className="export-actions"><button className="secondary-btn" onClick={()=>downloadJson({version:4,settings,song,mixer,master},settings.title)}><Icon name="disk" size={15}/> SAVE PROJECT</button><button className="export-btn" onClick={()=>downloadMidi(song,mixer)}><Icon name="download" size={16}/> EXPORT MIDI</button><button className="wav-export-btn" disabled={exportingAudio} onClick={exportAudio}><Icon name="download" size={16}/> {exportingAudio?'RENDERING…':'EXPORT WAV'}</button><button className="stem-export-btn" disabled={exportingAudio} onClick={exportStems}><Icon name="download" size={16}/> {exportingAudio?'RENDERING…':'STEMS ZIP'}</button><button className="pack-export-btn" disabled={exportingAudio} onClick={exportPack}><Icon name="download" size={16}/> {exportingAudio?'WORKING…':'DAW PACK ZIP'}</button><input ref={fileRef} type="file" hidden accept=".json,.phiano.json" onChange={importProject}/><input ref={midiRef} type="file" hidden accept=".mid,.midi,audio/midi" onChange={importMidiFile}/></div></div>
-          <div className="import-links"><button className="import-link" onClick={()=>fileRef.current?.click()}><Icon name="upload" size={15}/> IMPORT PROJECT JSON</button><button className="import-link" onClick={()=>midiRef.current?.click()}><Icon name="upload" size={15}/> IMPORT MIDI</button></div><div className="wav-note">WAV and stems include local WAV/SFZ/SF2 samples, synth voices, mixer and FX. Online GM SoundFonts remain audition-only. Six-stem and DAW Pack exports require songs under 2 minutes.</div>{exportProgress&&<div role="status" className="export-progress">{exportProgress}</div>}
+          <div className="import-links"><button className="import-link" onClick={()=>fileRef.current?.click()}><Icon name="upload" size={15}/> IMPORT PROJECT JSON</button><button className="import-link" onClick={()=>midiRef.current?.click()}><Icon name="upload" size={15}/> IMPORT MIDI</button></div><div className="wav-note">WAV and stems preserve the chosen A4 reference; non-440 MIDI uses channel pitch bend (verify DAW support). WAV and stems include local WAV/SFZ/SF2 samples, synth voices, mixer and FX. Online GM SoundFonts remain audition-only. Six-stem and DAW Pack exports require songs under 2 minutes.</div>{exportProgress&&<div role="status" className="export-progress">{exportProgress}</div>}
         </section>
 
         <aside className="mixer-sidebar"><div className="panel-heading"><span className="panel-number">04</span><h2>GROOVE & MIXER</h2><Icon name="headphones" size={18}/></div>
@@ -346,7 +348,7 @@ function App(){
           <div className="soundfont-block"><div><span className="sf-icon">▧</span><strong>SOUNDFONT PLAYER</strong></div><p>Instant built-in synth, or load sampled GM instrument patches when online.</p><button onClick={loadFonts} disabled={soundfontStatus.startsWith('Loading')}>LOAD GM SOUNDFONTS</button><small>{soundfontStatus}</small></div>
         </aside>
       </div>
-      <footer className="site-footer"><span>Φ369 LABS / PHIANOSHEETS v0.3C</span><span>BUILT FOR MUSIC MAKERS, NOT GATEKEEPERS.</span><span>OPEN SOURCE · MIT LICENSE</span></footer>
+      <footer className="site-footer"><span>Φ369 LABS / PHIANOSHEETS v0.4</span><span>BUILT FOR MUSIC MAKERS, NOT GATEKEEPERS.</span><span>OPEN SOURCE · MIT LICENSE</span></footer>
     </main>
   </div>;
 }
