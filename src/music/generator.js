@@ -29,7 +29,7 @@ export const SCALES = {
 };
 export const DEFAULT_SETTINGS = {
   title: 'The First Frequency', style: 'boomBap', root: 'C', scale: 'minor', bars: 32,
-  bpm: 92, swing: 29, humanize: 15, complexity: 56, density: 58, seed: 369,
+  bpm: 92, swing: 29, humanize: 15, complexity: 56, density: 58, seed: 369, a4Hz: 440,
 };
 
 /** Stable 32-bit hashing + PRNG for reproducible songs. */

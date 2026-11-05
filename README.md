@@ -158,3 +158,8 @@ The generator and MIDI exporter are pure JavaScript, intentionally portable into
 MIT project code. The optional third-party SoundFont library and sample patch data have their own licenses. Verify and honor those licenses before bundling sample assets for distribution; patches are loaded remotely by default and are not committed here.
 
 Built to help creators turn ideas into something they can actually finish.
+
+
+## Rung 4: Phi Harmonic Research Lab (v0.4)
+
+A4 reference control (415–466 Hz), temperament/interval explorer, acoustic partial-beating readouts, in-browser 432/440 blind preference trials and CSV export. Browser playback, local samples, and offline WAV/stem exports honor the project A4. MIDI exports non-440 references via a per-channel RPN pitch-bend-range message and pitch bend; verify DAW support. Online GM SoundFonts fall back to built-in synth when reference differs from A440. The whole-song temperament remains 12-TET; just intonation is laboratory audition-only. No health benefits are implied or proven. See [Rung 4 research and protocol](docs/harmonic-lab.md).
