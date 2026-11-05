@@ -6,11 +6,11 @@ import { createSong, TRACKS } from '../src/music/generator.js';
 import { buildMidi } from '../src/music/midi.js';
 
 test('SFZ groups, notes, velocities and local file safety',()=>{
-  const regions=parseSFZ(\`<control> default_path=samples/
+  const regions=parseSFZ(`<control> default_path=samples/
 <global> ampeg_release=.25
 <group> lokey=c3 hikey=b3
 <region> sample="soft piano.wav" hivel=70 pitch_keycenter=c4
-<region> sample="hard piano.wav" lovel=71 tune=-12 loop_mode=loop_continuous loop_start=40 loop_end=300\`);
+<region> sample="hard piano.wav" lovel=71 tune=-12 loop_mode=loop_continuous loop_start=40 loop_end=300`);
   assert.equal(regions.length,2);
   assert.equal(regions[0].path,'samples/soft piano.wav');
   assert.deepEqual([regions[0].keyLo,regions[0].keyHi,regions[0].root],[48,59,60]);
@@ -24,8 +24,8 @@ test('SFZ groups, notes, velocities and local file safety',()=>{
 
 test('local WAV loader and SFZ companion files decode without network',async()=>{
   const wav={name:'hat.wav',size:16,webkitRelativePath:'kit/samples/hat.wav',arrayBuffer:async()=>new ArrayBuffer(16)};
-  const sfz={name:'kit.sfz',size:120,text:async()=>\`<region> sample=hat.wav key=42
-<region> sample=hat.wav key=46\`};
+  const sfz={name:'kit.sfz',size:120,text:async()=>`<region> sample=hat.wav key=42
+<region> sample=hat.wav key=46`};
   let count=0;
   const mock={decodeAudioData:async()=>{count++;return {duration:.2,sampleRate:44100};}};
   const bank=await loadLocalBank([sfz,wav],mock);
