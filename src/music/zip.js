@@ -42,10 +42,11 @@ export function zipStore(entries){
     ...u16(entries.length),...u16(entries.length),...u32(centralBytes),...u32(offset),...u16(0)]);
   return new Blob([...parts,...central,end],{type:'application/zip'});
 }
-export function downloadZip(entries,title){
+export function downloadZip(entries,title,suffix='stems'){
   const blob=zipStore(entries),url=URL.createObjectURL(blob),a=document.createElement('a');
   const filename=String(title||'phianosheets').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'phianosheets';
-  a.href=url;a.download=filename+'-stems.zip';
+  const tail=String(suffix||'stems').toLowerCase().replace(/[^a-z0-9-]+/g,'-').replace(/^-|-$/g,'')||'stems';
+  a.href=url;a.download=filename+'-'+tail+'.zip';
   document.body.append(a);a.click();a.remove();
   setTimeout(()=>URL.revokeObjectURL(url),1200);
 }

@@ -68,6 +68,23 @@ The Sound Lab can now load **instrument samples from local files** without conta
 
 **Suggested field test:** Select a pitched track → LOAD SAMPLE FILES → select your SF2, WAV, or SFZ+WAVs → choose LOCAL SAMPLE BANK → listen → EXPORT WAV → open in FL Studio. For a shorter song, use STEMS ZIP and import the six WAV files as stems. Compare their timing against the original MIDI arrangement. Stereo stem summing may differ slightly from a combined master mix because each stem is compressed separately.
 
+## Rung 3C: FL Studio Production Pack (v0.3C)
+
+The **DAW PACK ZIP** button exports the working project as a single, organized file, built around the six separate MIDI and WAV tracks that already export to FL Studio.
+
+**Included in one ZIP**:
+- \`arrangement.mid\`: the existing format-1 multitrack MIDI export, untouched.
+- \`drums.wav\`, \`bass.wav\`, \`chords.wav\`, \`melody.wav\`, \`arp.wav\`, \`lead.wav\`: six stereo PCM16 WAV stems aligned from time zero. All have the same number of audio frames and include the same two-second tail.
+- \`project.phiano.json\`: the editable project, mixer, tempo, arrangement and musical notes.
+- \`manifest.json\`: BPM, key, scale, seed, track names, GM MIDI channel/program numbers, audio format, timeline alignment and note counts.
+- \`README.txt\`: practical FL Studio import instructions.
+
+To use it in **FL Studio**, extract the archive, set the song tempo shown in the README, and drag the six WAV stems onto separate audio lanes starting at bar 1. Or import \`arrangement.mid\` to assign your own instruments. Avoid double-playing the MIDI arrangement with the audio stems unless you intend to layer sounds.
+
+The existing **STEMS ZIP** export still produces only six WAV files. Both exporters now share one sequential offline stem renderer, with per-track progress. This keeps the two file formats musically consistent and avoids rendering multiple complete songs at once.
+
+**Limits:** Stems and Production Packs remain capped at **two minutes per song**, and can be memory-intensive on low-RAM devices. Each stem is compressed independently, so six summed stems will not necessarily match the combined WAV bounce exactly. Online GM SoundFonts remain audition-only; local sample banks are included in offline renders, but **the sample files themselves are never embedded or uploaded**. Projects using local samples require the original files to be selected again after refresh. WAV render, MIDI export and GitHub Pages remain unchanged.
+
 ## Local development
 
 Node 20.19+ / Node 22.12+ recommended.
