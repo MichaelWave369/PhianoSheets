@@ -163,3 +163,10 @@ Built to help creators turn ideas into something they can actually finish.
 ## Rung 4: Phi Harmonic Research Lab (v0.4)
 
 A4 reference control (415–466 Hz), temperament/interval explorer, acoustic partial-beating readouts, in-browser 432/440 blind preference trials and CSV export. Browser playback, local samples, and offline WAV/stem exports honor the project A4. MIDI exports non-440 references via a per-channel RPN pitch-bend-range message and pitch bend; verify DAW support. Online GM SoundFonts fall back to built-in synth when reference differs from A440. The whole-song temperament remains 12-TET; just intonation is laboratory audition-only. No health benefits are implied or proven. See [Rung 4 research and protocol](docs/harmonic-lab.md).
+
+
+## Rung 5: Controlled Arrangement Trials (v0.5)
+
+The new Listening Chamber renders **the same musical arrangement** at two A4 reference frequencies, with matched song notes, groove, instruments, mixer, effects, and timeline. A/B labels are randomized; vote after listening to both, then export anonymized CSV trial results, including source fingerprint and study settings. Rendered tracks are RMS-level-matched to the quieter render at playback. This is a practical preference experiment, not a medical or fully calibrated auditory study.
+
+For browser memory safety, whole arrangements up to two minutes can be rendered at both references. Longer songs automatically use an eight-bar excerpt; an excerpt-only option also works on shorter songs. All audio rendering and trials stay in the browser. Results are lost on refresh unless exported. See [the Rung 5 research protocol](docs/arrangement-trials.md).
